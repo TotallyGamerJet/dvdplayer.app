@@ -3,31 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Project</title>
+    <title>DVD Player</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 2rem;
-            line-height: 1.6;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+        .container {
+            text-align: center;
+            padding: 3rem;
+            border: 2px solid #00ff00;
+            border-radius: 10px;
+            box-shadow:
+                    0 0 20px rgba(0, 255, 0, 0.3),
+                    0 0 40px rgba(0, 255, 0, 0.2),
+                    0 0 60px rgba(0, 255, 0, 0.1),
+                    inset 0 0 20px rgba(0, 255, 0, 0.05);
+            background: rgba(0, 20, 0, 0.5);
+            animation: pulse 3s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% {
+                box-shadow:
+                        0 0 20px rgba(0, 255, 0, 0.3),
+                        0 0 40px rgba(0, 255, 0, 0.2),
+                        0 0 60px rgba(0, 255, 0, 0.1),
+                        inset 0 0 20px rgba(0, 255, 0, 0.05);
+            }
+            50% {
+                box-shadow:
+                        0 0 30px rgba(0, 255, 0, 0.5),
+                        0 0 60px rgba(0, 255, 0, 0.3),
+                        0 0 90px rgba(0, 255, 0, 0.2),
+                        inset 0 0 30px rgba(0, 255, 0, 0.1);
+            }
+        }
+        .icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            color: #00ff00;
+            text-shadow: 0 0 20px #00ff00;
         }
         h1 {
-            color: #333;
+            color: #00ff00;
+            font-size: 2rem;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 10px #00ff00;
         }
-        a {
-            color: #0366d6;
+        .status {
+            color: #00cc00;
+            font-size: 0.9rem;
+            letter-spacing: 2px;
+            opacity: 0.8;
+        }
+        .blinking {
+            animation: blink 1.5s step-end infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        .scanline {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: repeating-linear-gradient(
+                    0deg,
+                    rgba(0, 0, 0, 0.1) 0px,
+                    rgba(0, 0, 0, 0.1) 1px,
+                    transparent 1px,
+                    transparent 2px
+            );
         }
     </style>
 </head>
 <body>
-<h1>Welcome to My Project</h1>
-<p>This is a simple GitHub Pages site.</p>
-<h2>About</h2>
-<p>Add your project description here.</p>
-<h2>Links</h2>
-<ul>
-    <li><a href="https://github.com/username/repo">GitHub Repository</a></li>
-</ul>
+<div class="scanline"></div>
+<div class="container">
+    <div class="icon">💿</div>
+    <h1>DVD Player</h1>
+    <p class="status">// SYSTEM INITIALIZING <span class="blinking">_</span></p>
+    <p class="status" style="margin-top: 0.5rem;">Coming Soon</p>
+</div>
 </body>
 </html>
