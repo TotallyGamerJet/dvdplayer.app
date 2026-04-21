@@ -77,6 +77,30 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0; }
         }
+        .launch-btn {
+            margin-top: 1.5rem;
+            padding: 0.8rem 2rem;
+            background: transparent;
+            border: 2px solid #00ff00;
+            border-radius: 5px;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 1rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-shadow: 0 0 5px #00ff00;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+        }
+        .launch-btn:hover {
+            background: rgba(0, 255, 0, 0.1);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+            text-shadow: 0 0 10px #00ff00;
+        }
+        .launch-btn:active {
+            transform: scale(0.98);
+        }
         .scanline {
             position: fixed;
             top: 0;
@@ -101,6 +125,15 @@
     <h1>DVD Player</h1>
     <p class="status">// SYSTEM INITIALIZING <span class="blinking">_</span></p>
     <p class="status" style="margin-top: 0.5rem;">Coming Soon</p>
+    <button class="launch-btn" onclick="launchPlayer()">Launch Player</button>
 </div>
+<script>
+    function launchPlayer() {
+        document.body.innerHTML = '<iframe src="dvdplayer.html" allow="autoplay" width="640" height="480" style="border: none;"></iframe>';
+        document.body.style.display = 'flex';
+        document.body.style.justifyContent = 'center';
+        document.body.style.alignItems = 'center';
+    }
+</script>
 </body>
 </html>
