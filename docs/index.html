@@ -193,15 +193,42 @@
         try {
             const videoTsHandle = await dirHandle.getDirectoryHandle('VIDEO_TS', { create: false });
             console.log('Found VIDEO_TS folder - this is a DVD-Video disc!');
-            
-            // List VOB files
+        
+            // Collect all VOB files and hash them
+            const vobFiles = [];
             for await (const entry of videoTsHandle.values()) {
-                if (entry.name.endsWith('.VOB')) {
-                    console.log('Found VOB file:', entry.name);
+                if (entry.name.endsWith('.VOB') || entry.name.endsWith('.IFO') || entry.name.endsWith('.BUP')) {
+                    vobFiles.push(entry);
                 }
             }
-            // TODO: Process the DVD content
-            alert('DVD-Video disc detected!\nFound VIDEO_TS folder in: ' + dirHandle.name);
+            
+            // Launch player and wait for WASM to be ready
+            launchPlayer();
+            
+            // Wait a bit for WASM to initialize
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Hash each file using the Go WASM function
+            const iframe = document.querySelector('iframe');
+            const wasmWindow = iframe.contentWindow;
+            
+            for (const fileEntry of vobFiles) {
+                const file = await fileEntry.getFile();
+                // Note: In WASM context, we need to pass the file path or handle
+                // The hashMediaDisc function expects a path string
+                const filePath = `${dirHandle.name}/VIDEO_TS/${fileEntry.name}`;
+                
+                try {
+                    if (wasmWindow.hashMediaDisc) {
+                        const hash = await wasmWindow.hashMediaDisc(filePath);
+                        console.log(`Hash for ${fileEntry.name}: ${hash}`);
+                    } else {
+                        console.error('hashMediaDisc not available - WASM may not be loaded yet');
+                    }
+                } catch (err) {
+                    console.error(`Error hashing ${fileEntry.name}:`, err);
+                }
+            }
         } catch {
             // No VIDEO_TS, might be a data disc or ISO contents
             alert('Selected: ' + dirHandle.name + '\n(No VIDEO_TS folder found - not a standard DVD-Video disc)');

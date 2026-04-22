@@ -21,7 +21,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"syscall/js"
 
+	"codeberg.org/totallygamerjet/media/discdb"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/audio"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -64,6 +66,8 @@ func main() {
 	// Initialize audio context.
 	_ = audio.NewContext(48000)
 
+	js.Global().Set("hashMediaDisc", js.FuncOf(hashMediaDiscJS))
+
 	// If you want to play your own video, the video must be an MPEG-1 video with 48000 audio sample rate.
 	// You can convert the video to MPEG-1 with the below command:
 	//
@@ -100,4 +104,33 @@ func main() {
 	if err := ebiten.RunGame(g); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// hashMediaDiscJS is a JavaScript-callable function that hashes a disc file.
+// It takes a file path string and returns a Promise that resolves to the hash string.
+func hashMediaDiscJS(this js.Value, args []js.Value) any {
+	if len(args) < 1 {
+		return js.Global().Get("Promise").Call("reject", "missing file path argument")
+	}
+
+	discPath := args[0].String()
+
+	// Create a promise to return the result asynchronously
+	handler := js.FuncOf(func(this js.Value, promiseArgs []js.Value) any {
+		resolve := promiseArgs[0]
+		reject := promiseArgs[1]
+
+		go func() {
+			hash, err := discdb.HashMediaDisc(discPath)
+			if err != nil {
+				reject.Invoke(err.Error())
+				return
+			}
+			resolve.Invoke(hash)
+		}()
+
+		return nil
+	})
+
+	return js.Global().Get("Promise").New(handler)
 }
