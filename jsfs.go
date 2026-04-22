@@ -14,7 +14,7 @@ type FS struct {
 	root js.Value // FileSystemDirectoryHandle
 }
 
-func NewFS(root js.Value) *FS {
+func newJSFS(root js.Value) *FS {
 	return &FS{root: root}
 }
 

@@ -18,7 +18,6 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
-	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -51,28 +50,7 @@ func hashMediaDiscJS(this js.Value, args []js.Value) any {
 		reject := promiseArgs[1]
 
 		go func() {
-			discFS := NewFS(dirHandle)
-			err := fs.WalkDir(discFS, "VIDEO_TS", func(path string, d fs.DirEntry, err error) error {
-				if err != nil {
-					return err
-				}
-				// Print the path (or just files, if desired)
-				if !d.IsDir() {
-					info, err := d.Info()
-					if err != nil {
-						fmt.Println(path, err)
-					}
-					fmt.Println(path, info.Size())
-				}
-				return nil
-			})
-
-			if err != nil {
-				reject.Invoke("error walking path: " + err.Error())
-				return
-				//fmt.Printf("error walking the path: %v\n", err)
-			}
-
+			discFS := newJSFS(dirHandle)
 			hash, err := discdb.HashMediaFS(discFS)
 			if err != nil {
 				reject.Invoke(err.Error())
