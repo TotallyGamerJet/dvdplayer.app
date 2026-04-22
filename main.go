@@ -58,7 +58,11 @@ func hashMediaDiscJS(this js.Value, args []js.Value) any {
 				}
 				// Print the path (or just files, if desired)
 				if !d.IsDir() {
-					fmt.Println(path)
+					info, err := d.Info()
+					if err != nil {
+						fmt.Println(path, err)
+					}
+					fmt.Println(path, info.Size())
 				}
 				return nil
 			})

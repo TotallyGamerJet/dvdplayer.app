@@ -45,15 +45,11 @@ func (f *FS) Open(name string) (fs.File, error) {
 		if err != nil {
 			return nil, err
 		}
-		data, err := readFile(fileObj)
-		if err != nil {
-			return nil, err
-		}
 
 		return &File{
-			name: last,
-			data: data,
-			pos:  0,
+			name:    last,
+			fileObj: fileObj,
+			size:    int64(fileObj.Get("size").Float()),
 		}, nil
 	}
 
@@ -69,20 +65,33 @@ func (f *FS) Open(name string) (fs.File, error) {
 // ---------------- File ----------------
 
 type File struct {
-	name string
-	data []byte
-	pos  int64
+	name    string
+	fileObj js.Value // JS File object, used for lazy loading
+	size    int64
+	data    []byte
+	loaded  bool
+	pos     int64
 }
 
 func (f *File) Stat() (fs.FileInfo, error) {
 	return fileInfo{
 		name: f.name,
-		size: int64(len(f.data)),
+		size: f.size,
 		mode: 0444,
 	}, nil
 }
 
 func (f *File) Read(p []byte) (int, error) {
+	// Lazy load: read file data on first Read call
+	if !f.loaded {
+		data, err := readFile(f.fileObj)
+		if err != nil {
+			return 0, err
+		}
+		f.data = data
+		f.loaded = true
+	}
+
 	if f.pos >= int64(len(f.data)) {
 		return 0, io.EOF
 	}
