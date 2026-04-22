@@ -193,41 +193,28 @@
         try {
             const videoTsHandle = await dirHandle.getDirectoryHandle('VIDEO_TS', { create: false });
             console.log('Found VIDEO_TS folder - this is a DVD-Video disc!');
-        
-            // Collect all VOB files and hash them
-            const vobFiles = [];
-            for await (const entry of videoTsHandle.values()) {
-                if (entry.name.endsWith('.VOB') || entry.name.endsWith('.IFO') || entry.name.endsWith('.BUP')) {
-                    vobFiles.push(entry);
-                }
-            }
             
             // Launch player and wait for WASM to be ready
             launchPlayer();
             
-            // Wait a bit for WASM to initialize
+            // Wait for WASM to initialize
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            // Hash each file using the Go WASM function
+            // Hash the disc using the Go WASM function
             const iframe = document.querySelector('iframe');
             const wasmWindow = iframe.contentWindow;
             
-            for (const fileEntry of vobFiles) {
-                const file = await fileEntry.getFile();
-                // Note: In WASM context, we need to pass the file path or handle
-                // The hashMediaDisc function expects a path string
-                const filePath = `${dirHandle.name}/VIDEO_TS/${fileEntry.name}`;
-                
-                try {
-                    if (wasmWindow.hashMediaDisc) {
-                        const hash = await wasmWindow.hashMediaDisc(filePath);
-                        console.log(`Hash for ${fileEntry.name}: ${hash}`);
-                    } else {
-                        console.error('hashMediaDisc not available - WASM may not be loaded yet');
-                    }
-                } catch (err) {
-                    console.error(`Error hashing ${fileEntry.name}:`, err);
+            try {
+                if (wasmWindow.hashMediaDisc) {
+                    // Pass the directory handle, not a string path
+                    const hash = await wasmWindow.hashMediaDisc(dirHandle);
+                    console.log('Disc hash:', hash);
+                    alert('Disc hash: ' + hash);
+                } else {
+                    console.error('hashMediaDisc not available - WASM may not be loaded yet');
                 }
+            } catch (err) {
+                console.error('Error hashing disc:', err);
             }
         } catch {
             // No VIDEO_TS, might be a data disc or ISO contents

@@ -18,10 +18,13 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"syscall/js"
+	"time"
 
 	"codeberg.org/totallygamerjet/media/discdb"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -35,6 +38,158 @@ import (
 // "Shibuya Crossing, Tokyo, Japan (video).webm" by Basile Morin
 // The Creative Commons Attribution-Share Alike 4.0 International license
 const mpgURL = "https://example-resources.ebitengine.org/shibuya.mpg"
+
+// jsFS implements fs.FS backed by a JavaScript FileSystemDirectoryHandle
+type jsFS struct {
+	dirHandle js.Value
+}
+
+func (j *jsFS) Open(name string) (fs.File, error) {
+	name = strings.TrimPrefix(name, "/")
+	name = strings.TrimPrefix(name, "./")
+
+	parts := strings.Split(name, "/")
+	current := j.dirHandle
+
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+
+		isLast := i == len(parts)-1
+
+		if isLast {
+			promise := current.Call("getFileHandle", part)
+			result, err := awaitPromise(promise)
+			if err != nil {
+				return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+			}
+
+			filePromise := result.Call("getFile")
+			fileObj, err := awaitPromise(filePromise)
+			if err != nil {
+				return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+			}
+
+			return &jsFile{file: fileObj, name: part}, nil
+		} else {
+			promise := current.Call("getDirectoryHandle", part)
+			result, err := awaitPromise(promise)
+			if err != nil {
+				return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+			}
+			current = result
+		}
+	}
+
+	return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+}
+
+type jsFile struct {
+	file   js.Value
+	name   string
+	offset int64
+}
+
+func (f *jsFile) Stat() (fs.FileInfo, error) {
+	return &jsFileInfo{file: f.file, name: f.name}, nil
+}
+
+func (f *jsFile) Read(p []byte) (int, error) {
+	size := f.file.Get("size").Int()
+	if f.offset >= int64(size) {
+		return 0, io.EOF
+	}
+
+	end := f.offset + int64(len(p))
+	if end > int64(size) {
+		end = int64(size)
+	}
+
+	blob := f.file.Call("slice", f.offset, end)
+	promise := blob.Call("arrayBuffer")
+	ab, err := awaitPromise(promise)
+	if err != nil {
+		return 0, err
+	}
+
+	uint8Array := js.Global().Get("Uint8Array").New(ab)
+	n := uint8Array.Get("length").Int()
+	js.CopyBytesToGo(p, uint8Array)
+
+	f.offset += int64(n)
+	return n, nil
+}
+
+func (f *jsFile) Close() error {
+	return nil
+}
+
+type jsFileInfo struct {
+	file js.Value
+	name string
+}
+
+func (fi *jsFileInfo) Name() string       { return fi.name }
+func (fi *jsFileInfo) Size() int64        { return int64(fi.file.Get("size").Int()) }
+func (fi *jsFileInfo) Mode() fs.FileMode  { return 0444 }
+func (fi *jsFileInfo) ModTime() time.Time { return time.Time{} }
+func (fi *jsFileInfo) IsDir() bool        { return false }
+func (fi *jsFileInfo) Sys() any           { return nil }
+
+func awaitPromise(promise js.Value) (js.Value, error) {
+	done := make(chan struct{})
+	var result js.Value
+	var jsErr error
+
+	onResolve := js.FuncOf(func(this js.Value, args []js.Value) any {
+		result = args[0]
+		close(done)
+		return nil
+	})
+	defer onResolve.Release()
+
+	onReject := js.FuncOf(func(this js.Value, args []js.Value) any {
+		jsErr = fmt.Errorf("%v", args[0])
+		close(done)
+		return nil
+	})
+	defer onReject.Release()
+
+	promise.Call("then", onResolve, onReject)
+	<-done
+
+	return result, jsErr
+}
+
+// hashMediaDiscJS is a JavaScript-callable function that hashes a disc.
+// It takes a FileSystemDirectoryHandle and returns a Promise that resolves to the hash string.
+func hashMediaDiscJS(this js.Value, args []js.Value) any {
+	if len(args) < 1 {
+		return js.Global().Get("Promise").Call("reject", "missing directory handle argument")
+	}
+
+	dirHandle := args[0]
+
+	handler := js.FuncOf(func(this js.Value, promiseArgs []js.Value) any {
+		resolve := promiseArgs[0]
+		reject := promiseArgs[1]
+
+		go func() {
+			discFS := &jsFS{dirHandle: dirHandle}
+			hash, err := discdb.HashMediaFS(discFS)
+			if err != nil {
+				reject.Invoke(err.Error())
+				return
+			}
+			resolve.Invoke(hash)
+		}()
+
+		return nil
+	})
+
+	return js.Global().Get("Promise").New(handler)
+}
 
 type Game struct {
 	player *mpegPlayer
@@ -104,33 +259,4 @@ func main() {
 	if err := ebiten.RunGame(g); err != nil {
 		log.Fatal(err)
 	}
-}
-
-// hashMediaDiscJS is a JavaScript-callable function that hashes a disc file.
-// It takes a file path string and returns a Promise that resolves to the hash string.
-func hashMediaDiscJS(this js.Value, args []js.Value) any {
-	if len(args) < 1 {
-		return js.Global().Get("Promise").Call("reject", "missing file path argument")
-	}
-
-	discPath := args[0].String()
-
-	// Create a promise to return the result asynchronously
-	handler := js.FuncOf(func(this js.Value, promiseArgs []js.Value) any {
-		resolve := promiseArgs[0]
-		reject := promiseArgs[1]
-
-		go func() {
-			hash, err := discdb.HashMediaDisc(discPath)
-			if err != nil {
-				reject.Invoke(err.Error())
-				return
-			}
-			resolve.Invoke(hash)
-		}()
-
-		return nil
-	})
-
-	return js.Global().Get("Promise").New(handler)
 }
