@@ -167,15 +167,51 @@
         document.body.style.alignItems = 'center';
     }
 
-    function openDiscPicker() {
-        document.getElementById('disc-input').click();
+    async function openDiscPicker() {
+        try {
+            // Try directory picker first (works for disc drives)
+            if ('showDirectoryPicker' in window) {
+                const dirHandle = await window.showDirectoryPicker({
+                    mode: 'read'
+                });
+                console.log('Selected directory:', dirHandle.name);
+                await processDiscDirectory(dirHandle);
+            } else {
+                // Fallback to file picker for browsers without directory picker support
+                document.getElementById('disc-input').click();
+            }
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                console.error('Error selecting disc:', err);
+                alert('Error: ' + err.message);
+            }
+        }
+    }
+
+    async function processDiscDirectory(dirHandle) {
+        // Look for VIDEO_TS folder (DVD-Video structure)
+        try {
+            const videoTsHandle = await dirHandle.getDirectoryHandle('VIDEO_TS', { create: false });
+            console.log('Found VIDEO_TS folder - this is a DVD-Video disc!');
+            
+            // List VOB files
+            for await (const entry of videoTsHandle.values()) {
+                if (entry.name.endsWith('.VOB')) {
+                    console.log('Found VOB file:', entry.name);
+                }
+            }
+            // TODO: Process the DVD content
+            alert('DVD-Video disc detected!\nFound VIDEO_TS folder in: ' + dirHandle.name);
+        } catch {
+            // No VIDEO_TS, might be a data disc or ISO contents
+            alert('Selected: ' + dirHandle.name + '\n(No VIDEO_TS folder found - not a standard DVD-Video disc)');
+        }
     }
 
     function handleDiscSelected(event) {
         const file = event.target.files[0];
         if (file) {
             console.log('Selected disc/ISO:', file.name);
-            // Handle the selected file - you can process the ISO here
             alert('Selected: ' + file.name + '\nSize: ' + (file.size / 1024 / 1024).toFixed(2) + ' MB');
         }
     }
