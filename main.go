@@ -22,9 +22,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"syscall/js"
-	"time"
 
 	"codeberg.org/totallygamerjet/media/discdb"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -38,129 +36,6 @@ import (
 // "Shibuya Crossing, Tokyo, Japan (video).webm" by Basile Morin
 // The Creative Commons Attribution-Share Alike 4.0 International license
 const mpgURL = "https://example-resources.ebitengine.org/shibuya.mpg"
-
-// jsFS implements fs.FS backed by a JavaScript FileSystemDirectoryHandle
-type jsFS struct {
-	dirHandle js.Value
-}
-
-func (j *jsFS) Open(name string) (fs.File, error) {
-	name = strings.TrimPrefix(name, "/")
-	name = strings.TrimPrefix(name, "./")
-
-	parts := strings.Split(name, "/")
-	current := j.dirHandle
-
-	for i, part := range parts {
-		if part == "" {
-			continue
-		}
-
-		isLast := i == len(parts)-1
-
-		if isLast {
-			promise := current.Call("getFileHandle", part)
-			result, err := awaitPromise(promise)
-			if err != nil {
-				return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
-			}
-
-			filePromise := result.Call("getFile")
-			fileObj, err := awaitPromise(filePromise)
-			if err != nil {
-				return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
-			}
-
-			return &jsFile{file: fileObj, name: part}, nil
-		} else {
-			promise := current.Call("getDirectoryHandle", part)
-			result, err := awaitPromise(promise)
-			if err != nil {
-				return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
-			}
-			current = result
-		}
-	}
-
-	return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
-}
-
-type jsFile struct {
-	file   js.Value
-	name   string
-	offset int64
-}
-
-func (f *jsFile) Stat() (fs.FileInfo, error) {
-	return &jsFileInfo{file: f.file, name: f.name}, nil
-}
-
-func (f *jsFile) Read(p []byte) (int, error) {
-	size := f.file.Get("size").Int()
-	if f.offset >= int64(size) {
-		return 0, io.EOF
-	}
-
-	end := f.offset + int64(len(p))
-	if end > int64(size) {
-		end = int64(size)
-	}
-
-	blob := f.file.Call("slice", f.offset, end)
-	promise := blob.Call("arrayBuffer")
-	ab, err := awaitPromise(promise)
-	if err != nil {
-		return 0, err
-	}
-
-	uint8Array := js.Global().Get("Uint8Array").New(ab)
-	n := uint8Array.Get("length").Int()
-	js.CopyBytesToGo(p, uint8Array)
-
-	f.offset += int64(n)
-	return n, nil
-}
-
-func (f *jsFile) Close() error {
-	return nil
-}
-
-type jsFileInfo struct {
-	file js.Value
-	name string
-}
-
-func (fi *jsFileInfo) Name() string       { return fi.name }
-func (fi *jsFileInfo) Size() int64        { return int64(fi.file.Get("size").Int()) }
-func (fi *jsFileInfo) Mode() fs.FileMode  { return 0444 }
-func (fi *jsFileInfo) ModTime() time.Time { return time.Time{} }
-func (fi *jsFileInfo) IsDir() bool        { return false }
-func (fi *jsFileInfo) Sys() any           { return nil }
-
-func awaitPromise(promise js.Value) (js.Value, error) {
-	done := make(chan struct{})
-	var result js.Value
-	var jsErr error
-
-	onResolve := js.FuncOf(func(this js.Value, args []js.Value) any {
-		result = args[0]
-		close(done)
-		return nil
-	})
-	defer onResolve.Release()
-
-	onReject := js.FuncOf(func(this js.Value, args []js.Value) any {
-		jsErr = fmt.Errorf("%v", args[0])
-		close(done)
-		return nil
-	})
-	defer onReject.Release()
-
-	promise.Call("then", onResolve, onReject)
-	<-done
-
-	return result, jsErr
-}
 
 // hashMediaDiscJS is a JavaScript-callable function that hashes a disc.
 // It takes a FileSystemDirectoryHandle and returns a Promise that resolves to the hash string.
@@ -176,7 +51,24 @@ func hashMediaDiscJS(this js.Value, args []js.Value) any {
 		reject := promiseArgs[1]
 
 		go func() {
-			discFS := &jsFS{dirHandle: dirHandle}
+			discFS := NewFS(dirHandle)
+			err := fs.WalkDir(discFS, "VIDEO_TS", func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				// Print the path (or just files, if desired)
+				if !d.IsDir() {
+					fmt.Println(path)
+				}
+				return nil
+			})
+
+			if err != nil {
+				reject.Invoke("error walking path: " + err.Error())
+				return
+				//fmt.Printf("error walking the path: %v\n", err)
+			}
+
 			hash, err := discdb.HashMediaFS(discFS)
 			if err != nil {
 				reject.Invoke(err.Error())
