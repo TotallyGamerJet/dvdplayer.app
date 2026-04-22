@@ -1,3 +1,5 @@
+//go:build js
+
 package main
 
 import (
@@ -8,7 +10,43 @@ import (
 	"strings"
 	"syscall/js"
 	"time"
+
+	"codeberg.org/totallygamerjet/media/discdb"
 )
+
+// hashMediaDiscJS is a JavaScript-callable function that hashes a disc.
+// It takes a FileSystemDirectoryHandle and returns a Promise that resolves to the hash string.
+func hashMediaDiscJS(this js.Value, args []js.Value) any {
+	if len(args) < 1 {
+		return js.Global().Get("Promise").Call("reject", "missing directory handle argument")
+	}
+
+	dirHandle := args[0]
+
+	handler := js.FuncOf(func(this js.Value, promiseArgs []js.Value) any {
+		resolve := promiseArgs[0]
+		reject := promiseArgs[1]
+
+		go func() {
+			discFS := newJSFS(dirHandle)
+			hash, err := discdb.HashMediaFS(discFS)
+			if err != nil {
+				reject.Invoke(err.Error())
+				return
+			}
+			resolve.Invoke(hash)
+		}()
+
+		return nil
+	})
+
+	return js.Global().Get("Promise").New(handler)
+}
+
+func init() {
+	js.Global().Set("hashMediaDisc", js.FuncOf(hashMediaDiscJS))
+
+}
 
 type FS struct {
 	root js.Value // FileSystemDirectoryHandle
