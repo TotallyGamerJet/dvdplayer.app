@@ -116,10 +116,42 @@
                     transparent 2px
             );
         }
-    </style>
+.open-disc-btn {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    padding: 0.6rem 1.2rem;
+    background: transparent;
+    border: 2px solid #00ff00;
+    border-radius: 5px;
+    color: #00ff00;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-shadow: 0 0 5px #00ff00;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+    z-index: 100;
+}
+.open-disc-btn:hover {
+    background: rgba(0, 255, 0, 0.1);
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+    text-shadow: 0 0 10px #00ff00;
+}
+.open-disc-btn:active {
+    transform: scale(0.98);
+}
+#disc-input {
+    display: none;
+}
+</style>
 </head>
 <body>
 <div class="scanline"></div>
+<button class="open-disc-btn" onclick="openDiscPicker()">📀 Open Disc/ISO</button>
+<input type="file" id="disc-input" accept=".iso,.img,.bin,.cue" onchange="handleDiscSelected(event)">
 <div class="container">
     <div class="icon">💿</div>
     <h1>DVD Player</h1>
@@ -133,6 +165,19 @@
         document.body.style.display = 'flex';
         document.body.style.justifyContent = 'center';
         document.body.style.alignItems = 'center';
+    }
+
+    function openDiscPicker() {
+        document.getElementById('disc-input').click();
+    }
+
+    function handleDiscSelected(event) {
+        const file = event.target.files[0];
+        if (file) {
+            console.log('Selected disc/ISO:', file.name);
+            // Handle the selected file - you can process the ISO here
+            alert('Selected: ' + file.name + '\nSize: ' + (file.size / 1024 / 1024).toFixed(2) + ' MB');
+        }
     }
 </script>
 </body>
